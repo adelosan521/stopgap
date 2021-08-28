@@ -107,21 +107,31 @@ neuronSwitchList <- analyzePFAM(
   quiet=FALSE)
 
 
-
+signalp1 <- file.path("signalp", c("signalp1.txt", "signalp2.txt", "signalp3.txt", "signalp4.txt", "signalp5.txt",
+                                   "signalp6.txt", "signalp7.txt", "signalp8.txt", "signalp9.txt", "signalp10.txt",
+                                   "signalp11.txt", "signalp12.txt", "signalp13.txt", "signalp14.txt", "signalp15.txt",
+                                   "signalp16.txt", "signalp17.txt", "signalp18.txt", "signalp19.txt", "signalp20.txt",
+                                   "signalp21.txt", "signalp22.txt", "signalp23.txt", "signalp24.txt", "signalp25.txt",
+                                   "signalp26.txt", "signalp27.txt", "signalp28.txt", "signalp29.txt", "signalp30.txt",
+                                   "signalp31.txt", "signalp32.txt", "signalp33.txt", "signalp34.txt", "signalp35.txt",
+                                   "signalp36.txt", "signalp37.txt", "signalp38.txt", "signalp39.txt", "signalp40.txt",
+                                   "signalp41.txt", "signalp42.txt", "signalp43.txt", "signalp44.txt"))
+signalp1
 neuronSwitchList <- analyzeSignalP(
   neuronSwitchList,
-  pathToSignalPresultFile = "/t1-data/user/aangeles/fastaq_files/salmon/output_protein_type2.txt"
+  pathToSignalPresultFile = signalp1
 )
-
+iupred2a1 <- file.path("iupred2a", c("preb1.result","preb2.result", "preb3.result", "preb4.result", "preb5.result",
+                                     "preb6.result", "preb7.result", "preb8.result", "preb9.result", "preb10.result", "preb11.result", "preb12.result",
+                                     "preb13.result", "preb14.result", "preb15.result", "preb16.result", "preb17.result", "preb18.result", "preb19.result",
+                                     "preb20.result", "preb21.result", "preb22.result", "preb23.result", "preb24.result", "preb25.result", "preb26.result", 
+                                     "preb27.result", "preb28.result", "preb29.result", "preb30.result", "preb31.result", "preb32.result", "preb33.result",
+                                     "preb34.result", "preb35.result", "preb36.result", "preb37.result", "preb38.result", "preb39.result", "preb40.result",
+                                     "preb41.result", "preb42.result", "preb43.result", "preb44.result"))
+iupred2a1
 neuronSwitchList <- analyzeIUPred2A(
   neuronSwitchList, 
-  pathToIUPred2AresultFile  = "preb1.result","preb2.result", "preb3.result", "preb4.result", "preb5.result",
-  "preb6.result", "preb7.result", "preb8.result", "preb9.result", "preb10.result", "preb11.result", "preb12.result",
-  "preb13.result", "preb14.result", "preb15.result", "preb16.result", "preb17.result", "preb18.result", "preb19.result",
-  "preb20.result", "preb21.result", "preb22.result", "preb23.result", "preb24.result", "preb25.result", "preb26.result", 
-  "preb27.result", "preb28.result", "preb29.result", "preb30.result", "preb31.result", "preb32.result", "preb33.result",
-  "preb34.result", "preb35.result", "preb36.result", "preb37.result", "preb38.result", "preb39.result", "preb40.result",
-  "preb41.result", "preb42.result", "preb43.result", "preb44.result", 
+  pathToIUPred2AresultFile  = iupred2a1, 
   smoothingWindowSize = 5,
   showProgress = TRUE,
   quiet = FALSE
