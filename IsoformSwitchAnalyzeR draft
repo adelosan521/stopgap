@@ -1,0 +1,152 @@
+#Clear out R before starting anything
+rm(list=ls())
+#Set the working directory to my file
+setwd("/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/")
+getwd()
+#Import libraries 
+library(plyr) #rename columns easily
+library(tximport) #import and calculate input data correctly
+library(IsoformSwitchAnalyzeR) # complete workflow for a DTU and functional consequences
+library(DRIMSeq) # DTU package
+#library(rats) #DTU package
+library(data.table) # for data.table structure if required
+### 1 Import data using ISAR (ensure correct format in dir - each quant.sf in own subdir)
+salmonQuant <- importIsoformExpression(parentDir = "/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/")
+# check imported correctly
+head(salmonQuant$abundance, 5)
+head(salmonQuant$counts, 5)
+### 2 Create matrix of experimental design
+sampleType <- rep("neuron", ncol(salmonQuant$abundance[-1])) #D = differentiated; U = undifferentiated
+sampleType[grep("ERR9", colnames(salmonQuant$abundance[-1]))] <- "ipsc"
+sampleType[grep("ERR12", colnames(salmonQuant$abundance[-1]))] <- "ipsc"
+ProjectDesign <- data.frame(sampleID = colnames(salmonQuant$abundance)[-1], condition = sampleType) 
+ProjectDesign$condition <- as.factor(ProjectDesign$condition)
+ProjectDesign
+### 3 Create a switchAnalyzeRlist object with the other inputs (reference gtf and transcriptome .fa used for salmon quant)
+neuronSwitchList <- importRdata(
+  isoformCountMatrix   = salmonQuant$counts,
+  isoformRepExpression = salmonQuant$abundance,
+  designMatrix         = ProjectDesign,
+  isoformExonAnnoation= "output.gtf",
+  isoformNtFasta       = "SHSY5Y_ONT_TALON_custom_transcriptome1.fa",
+  showProgress = TRUE)
+neuronSwitchList <- importRdata(
+  isoformCountMatrix   = salmonQuant$counts,
+  isoformRepExpression = salmonQuant$abundance,
+  designMatrix         = ProjectDesign,
+  isoformExonAnnoation= "output2.gtf",
+  isoformNtFasta       = "SHSY5Y_ONT_TALON_custom_transcriptome1.fa",
+  showProgress = TRUE)
+neuronSwitchList
+summary(neuronSwitchList)
+# extract the isoform IDs (and corresponding gene IDs) of the subset that survived filtering based on read counts (i.e. were assessed for DTU because at least 1 had reads!)
+outfile <- cbind(neuronSwitchList$isoformFeatures$isoform_id, neuronSwitchList$isoformFeatures$gene_id)
+#write.table(outfile, 'assessed_isoformIDs_N98449_with_geneIDs_N32325.txt', sep = '\t', quote = FALSE)
+### Run part 1 of analysis. Testing for isoform switches via DEXSEQ. This filters non-expressed isoforms, identifies isoform switches, annotates ORFs swtiches, and outputs both nuceotide and peptide fastas for part2 (function consequences). 
+neuronSwitchList <- isoformSwitchAnalysisPart1(
+  switchAnalyzeRlist = neuronSwitchList,
+  pathToOutput = "/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/",
+  pathToGTF = "/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/output2.gtf",
+  outputSequences = TRUE, # already run, just rerun to get SwitchList results, normally set to TRUE for first time to output sequences
+  prepareForWebServers = TRUE) # webservers option throws error
+
+## alternative isoformswitcchanalysispart1
+
+neuronSwitchList <- preFilter(neuronSwitchList)
+neuronSwitchList <- isoformSwitchTestDEXSeq(neuronSwitchList, alpha = 0.05, dIFcutoff = 0.1)
+neuronSwitchList <- addORFfromGTF(neuronSwitchList, pathToGTF = "/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/output2.gtf")
+neuronSwitchList <- analyzeNovelIsoformORF(neuronSwitchList, analysisAllIsoformsWithoutORF = TRUE, genomeObject = NULL, startCodons = "ATG",
+                       stopCodons = c("TAA", "TAG", "TGA"),
+                       showProgress = TRUE,
+                       quiet = FALSE)
+neuronSwitchList <- extractSequence(neuronSwitchList, pathToOutput = "/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/", writeToFile=TRUE, removeShortAAseq = TRUE, removeLongAAseq= TRUE, alsoSplitFastaFile=TRUE)
+extractSwitchSummary(neuronSwitchList)
+
+### Run external assessments of results and import for stage 2 of functional consequence prediction:
+
+#CPAT: https://wlcb.oit.uci.edu/cpat/
+#PFAM: https://www.ebi.ac.uk/Tools/hmmer/search/hmmscan
+#IUPred2A: https://iupred2a.elte.hu/
+#SignalP: http://www.cbs.dtu.dk/services/SignalP/
+)
+## stage 2
+neuronSwitchList <- isoformSwitchAnalysisPart2(
+  switchAnalyzeRlist        = neuronSwitchList, 
+  dIFcutoff                 = 0.1,   # Cutoff for defining switch size 
+  n                         = 10,    # if plotting was enabled, it would only output the top 10 switches
+  removeNoncodinORFs        = TRUE,  # Because ORF was predicted de novo
+  codingCutoff = 0.725,
+  pathToCPATresultFile      = "/t1-data/user/aangeles/fastaq_files/salmon/DTU_Apr2021_CPAT.txt",
+  pathToPFAMresultFile      = "/t1-data/user/aangeles/fastaq_files/salmon/DTU_Apr2021_Pfam.txt",
+  pathToIUPred2AresultFile  = "/t1-data/user/aangeles/fastaq_files/salmon/DTU_Apr2021_IUPRED2A.txt", 
+  pathToSignalPresultFile   = "/t1-data/user/aangeles/fastaq_files/salmon/DTU_Apr2021_SignalP.txt", 
+  outputPlots               = FALSE,
+  quiet = FALSE )
+
+neuronSwitchList <- analyzeCPAT(
+  neuronSwitchList,
+  pathToCPATresultFile = "/stopgap/tunbridgelab/aangeles/fastaq_files/salmon/cpat_result.txt", 
+  codingCutoff = 0.725, 
+  removeNoncodinORFs = TRUE,
+  quiet=FALSE
+)
+
+pfam1 <- file.path("pfam", c("pfam1.txt", "pfam2.txt", "pfam3.txt", "pfam4.txt", "pfam5.txt", "pfam6.txt",
+                             "pfam7.txt", "pfam8.txt", "pfam9.txt", "pfam10.txt", "pfam11.txt", "pfam12.txt",
+                             "pfam13.txt", "pfam14.txt", "pfam15.txt", "pfam16.txt", "pfam17.txt", "pfam18.txt",
+                             "pfam19.txt", "pfam20.txt", "pfam21.txt", "pfam22.txt", "pfam23.txt", "pfam24.txt",
+                             "pfam25.txt", "pfam26.txt", "pfam27.txt", "pfam28.txt", "pfam29.txt", "pfam30.txt",
+                             "pfam31.txt", "pfam32.txt", "pfam33.txt", "pfam34.txt", "pfam35.txt", "pfam36.txt",
+                             "pfam37.txt", "pfam38.txt", "pfam39.txt", "pfam40.txt", "pfam41.txt", "pfam42.txt",
+                             "pfam43.txt", "pfam44.txt"))
+pfam1
+neuronSwitchList <- analyzePFAM(
+  neuronSwitchList, 
+  pathToPFAMresultFile = pfam1,
+  showProgress=TRUE,
+  quiet=FALSE)
+
+
+
+neuronSwitchList <- analyzeSignalP(
+  neuronSwitchList,
+  pathToSignalPresultFile = "/t1-data/user/aangeles/fastaq_files/salmon/output_protein_type2.txt"
+)
+
+neuronSwitchList <- analyzeIUPred2A(
+  neuronSwitchList, 
+  pathToIUPred2AresultFile  = "preb1.result","preb2.result", "preb3.result", "preb4.result", "preb5.result",
+  "preb6.result", "preb7.result", "preb8.result", "preb9.result", "preb10.result", "preb11.result", "preb12.result",
+  "preb13.result", "preb14.result", "preb15.result", "preb16.result", "preb17.result", "preb18.result", "preb19.result",
+  "preb20.result", "preb21.result", "preb22.result", "preb23.result", "preb24.result", "preb25.result", "preb26.result", 
+  "preb27.result", "preb28.result", "preb29.result", "preb30.result", "preb31.result", "preb32.result", "preb33.result",
+  "preb34.result", "preb35.result", "preb36.result", "preb37.result", "preb38.result", "preb39.result", "preb40.result",
+  "preb41.result", "preb42.result", "preb43.result", "preb44.result", 
+  smoothingWindowSize = 5,
+  showProgress = TRUE,
+  quiet = FALSE
+  )
+
+neuronSwitchList
+
+neuronSwitchList <- analyzeAlternativeSplicing(neuronSwitchList)
+neuronSwitchList <- analyzeSwitchConsequences(neuronSwitchList)
+extractSwitchSummary(neuronSwitchList, dIFcutoff = 0.4, filterForConsequences = TRUE)
+?extractSequence
+switchPlotTopSwitches(neuronSwitchList, n = 10, filterForConsequences = TRUE, fileType = "pdf", pathToOutput = getwd())
+?switchPlotTopSwitches
+
+neuronSwitchList <- analyzeIntronRetention(neuronSwitchList)
+neuronSwitchList <- analyzeSwitchConsequences(neuronSwitchList)
+extractTopSwitches(neuronSwitchList, filterForConsequences = TRUE, n=3)
+
+
+if (!requireNamespace("devtools", quietly = TRUE)){
+  install.packages("devtools")
+}
+devtools::install_github("kvittingseerup/IsoformSwitchAnalyzeR", build_vignettes = TRUE)
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+
+BiocManager::install("tximeta")
